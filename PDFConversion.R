@@ -1,4 +1,6 @@
 
+# Section 1 infrastructure ------------
+
 my_packages <- c("tidyverse", 
                  "broom", 
                  "fs", 
@@ -9,7 +11,10 @@ invisible(lapply(my_packages, require, character.only = TRUE)) # load multiple p
 
   # creates fs_path vector of each file in that directory
 projectFiles <- dir_ls('./') 
-  # Remove non-PDF files from vector.
+
+# Section 2, preparing FY25 report --------------
+
+  # Fetch FY25 PDF files from vector.
 projectFilesFY25 <- projectFiles[grepl('\\FY25.pdf$', projectFiles)]
 
 projectFilesFY25_list <- projectFilesFY25 %>%
@@ -33,6 +38,8 @@ names(projectFilesFY25_list) <- projectFilesFY25
         # 1 dataframe per page 
   # list[[list]][[tibble]]
 
+# Section 3, flatten list (might be reusable) --------------
+
   # flatten list: stamps each row with source page number and filename
   # (note that filename is the same for all rows of 
   # a data set that comes from one file)
@@ -52,12 +59,14 @@ for (i in seq_along(projectFilesFY25_list)) {
                      )
   }
 
-  # this bind_rows takes all of the df observations 
-  # from all of the list elements and binds them together in a single df.
-
+# this bind_rows takes all of the df observations 
+# from all of the list elements and binds them together in a single df.
+ 
 fullDF <- flatList %>%
   bind_rows() %>% 
   filter(y >= 89 & y < 742)   # omit header and footer
+
+# Section 4, FY25 coordinate fixes --------------
   
   # When the parcel info field on the original report
   # gets too close to the right edge, map(pdf_data) seems to interpret 
@@ -72,6 +81,8 @@ fullDF$space[fullDF$x + fullDF$width == 283] <- FALSE
   # caused separation of Book/Page values
 fullDF$space[fullDF$page_num == 89 & fullDF$x == 186 & fullDF$y == 429] <- TRUE
 fullDF$space[fullDF$page_num == 103 & fullDF$x == 186 & fullDF$y == 434] <- TRUE
+
+# Section 5, grouping and widening (might be reusable) --------------
 
 concatDF <- fullDF %>%
   mutate(group = cumsum(lag(!space, default = TRUE))) %>% # Increment group when space is FALSE
@@ -91,7 +102,6 @@ concatDF <- fullDF %>%
   #select(as.character(sort(as.numeric(names(.)))))
   arrange(page_num, y, x) # Sort rows by coordinates
 
-
 # widen by turning x coordinates into column names
 # this replicates the format of the original report, 
 # albeit with staggered lines that we need to realign further down.
@@ -110,6 +120,8 @@ wideDF <- concatDF %>%
 
   # now we have a df that is simply x:y coordinates of the page
   # time to smush cols together, yay smush!
+
+# Section 6, more FY25 coordinate fixes --------------
 
   # Remove the y = 89 row from original data
 headingDF <- wideDF %>% filter(y != 89)
@@ -159,13 +171,8 @@ smushDF <- headingDF %>%
         na.rm = TRUE,
         remove = TRUE)
 
-############################
-############################
-############################
-############################
+# Section 7, FY25 Brute fix functions --------------
 
-  # Brute fix functions
-  # 
   # parcel ID and assessment = LAND are sometimes misaligned by a hair
   # causing two df rows instead of one
   # this identifies those pairs by matching two patterns, A and B
@@ -219,10 +226,8 @@ validate_updates <- function(df, mapping) {
     all(df$parcel[row_a] == df$parcel[row_b])
 }
 
-############################
-############################
-############################
-############################
+
+# Section 8, Parse FY25 fields (might be reusable) --------------
 
   # Owner part 1
   # 
@@ -343,10 +348,7 @@ parseAssessmentDF <- parseTypeDF %>%
          tax_due =
            ifelse(assessment == "Tax", as.numeric(gsub("[$,]", "", committed)), NA))
 
-################
-################
-################
-################
+# Section 9, Clean up final FY25 DF --------------
 
 # report_row has some ";"
 # 
@@ -388,7 +390,8 @@ finalDF <- select(combinedDF,
 #                                          summary)))
 
 
-# create summary df
+# Section 10, Create FY25 summaries and exports -------------- 
+
 calculate_summary_df <- function(dataframe, cols) {
   
   # Calculate summary statistics for specified columns
@@ -444,7 +447,50 @@ summnpDF <- calculate_summary_df(npDF, numeric_cols)
 
 # export
 write_xlsx(finalDF, "../export_files/leverett_tax_commitments_fy25.xlsx")
-write_xlsx(npDF, "../export_files/nixon_peabody.xlsx")
-write_xlsx(summfinalDF, "../export_files/summary.xlsx")
-write_xlsx(summnpDF, "../export_files/summaryNP.xlsx")
+write_xlsx(npDF, "../export_files/nixon_peabody_fy25.xlsx")
+write_xlsx(summfinalDF, "../export_files/summary_fy25.xlsx")
+write_xlsx(summnpDF, "../export_files/summaryNP_fy25.xlsx")
 
+# Section 11, Prep FY23 and FY24 -------------- 
+
+# Fetch and consume FY23 and FY24 PDF files from vector.
+projectFilesFY2324 <- projectFiles[grepl('\\FY2[3-4].pdf$', projectFiles)]
+
+projectFilesFY2324_list <- projectFilesFY2324 %>%
+  map(pdf_data) 
+
+names(projectFilesFY2324_list) <- projectFilesFY2324
+
+# projectFilesFY2324_list structure is:
+# a list of two lists
+# of a large number of lists (one for each page)
+# 1 dataframe per page 
+# list[[list]][[list]][[tibble]]
+
+# Section 12, flatten FY23 and FY24 -------------- 
+
+# flatten list: stamps each row with source page number and filename
+# (note that filename is the same for all rows of 
+# a data set that comes from one file)
+
+flatList <- list()
+for (i in seq_along(projectFilesFY2324_list)) { 
+  # seq_along(projectFilesFY2324_list) creates 
+  # vector with a number value for each list element
+  for (j in seq_along(projectFilesFY2324_list[[i]])) {
+    projectFilesFY2324_list[[i]][[j]] <- mutate(projectFilesFY2324_list[[i]][[j]], page_num = j)
+  }
+  flatList <- append(flatList, map2(projectFilesFY2324_list[[i]], 
+                                    names(projectFilesFY2324_list[i]), 
+                                    ~.x %>% 
+                                      mutate(filename = .y)
+  )
+  )
+}
+
+# this bind_rows takes all of the df observations 
+# from all of the list elements and binds them together in a single df.
+
+fullDF_FY2324 <- flatList %>%
+  bind_rows() %>% 
+  filter(y >= 89 & y < 742)   # omit header and footer
