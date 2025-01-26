@@ -10,9 +10,9 @@ invisible(lapply(my_packages, require, character.only = TRUE)) # load multiple p
   # creates fs_path vector of each file in that directory
 projectFiles <- dir_ls('./') 
   # Remove non-PDF files from vector.
-projectFiles <- projectFiles[grepl('\\.pdf$', projectFiles)]
+projectFilesFY25 <- projectFiles[grepl('\\FY25.pdf$', projectFiles)]
 
-projectFiles_list <- projectFiles %>%
+projectFilesFY25_list <- projectFilesFY25 %>%
   map(pdf_data) 
   # purrr function that applies pdf_data reading function 
   # to each file element of fs_path vector
@@ -25,9 +25,9 @@ projectFiles_list <- projectFiles %>%
   # now that I've consumed my files 
   # I can str_replace to get town and year info from each filename.
 
-names(projectFiles_list) <- projectFiles
+names(projectFilesFY25_list) <- projectFilesFY25
 
-  # projectFiles_list structure is:
+  # projectFilesFY25_list structure is:
     # a list 
       # of 183 lists (one for each page)
         # 1 dataframe per page 
@@ -38,14 +38,14 @@ names(projectFiles_list) <- projectFiles
   # a data set that comes from one file)
 
 flatList <- list()
-for (i in seq_along(projectFiles_list)) { 
-    # seq_along(projectFiles_list) creates 
+for (i in seq_along(projectFilesFY25_list)) { 
+    # seq_along(projectFilesFY25_list) creates 
     # vector with a number value for each list element
-  for (j in seq_along(projectFiles_list[[i]])) {
-    projectFiles_list[[i]][[j]] <- mutate(projectFiles_list[[i]][[j]], page_num = j)
+  for (j in seq_along(projectFilesFY25_list[[i]])) {
+    projectFilesFY25_list[[i]][[j]] <- mutate(projectFilesFY25_list[[i]][[j]], page_num = j)
   }
-  flatList <- append(flatList, map2(projectFiles_list[[i]], 
-                                    names(projectFiles_list[i]), 
+  flatList <- append(flatList, map2(projectFilesFY25_list[[i]], 
+                                    names(projectFilesFY25_list[i]), 
                                     ~.x %>% 
                                       mutate(filename = .y)
                                     )
