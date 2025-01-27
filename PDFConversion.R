@@ -100,7 +100,7 @@ concatDF <- fullDF %>%
   ) %>%
   select(-group) %>%  # Remove the grouping column
   #select(as.character(sort(as.numeric(names(.)))))
-  arrange(page_num, y, x) # Sort rows by coordinates
+  arrange(filename, page_num, y, x) # Sort rows by coordinates
 
 # widen by turning x coordinates into column names
 # this replicates the format of the original report, 
@@ -112,16 +112,16 @@ wideDF <- concatDF %>%
     names_from = x, 
     values_from = text) %>% 
   select(page_num, ######### sort x coordinate columns
-         y, 
+         y,
+         filename,
          as.character(
            sort(as.numeric(
-               setdiff(names(.), c("page_num", "y", "filename"))))), 
-         filename)
+               setdiff(names(.), c("page_num", "y", "filename"))))))
 
   # now we have a df that is simply x:y coordinates of the page
   # time to smush cols together, yay smush!
 
-# Section 6, more FY25 coordinate fixes --------------
+# Section 6, FY25 set coordinates and unite --------------
 
   # Remove the y = 89 row from original data
 headingDF <- wideDF %>% filter(y != 89)
@@ -473,14 +473,14 @@ names(projectFilesFY2324_list) <- projectFilesFY2324
 # (note that filename is the same for all rows of 
 # a data set that comes from one file)
 
-flatList <- list()
+flatList2 <- list()
 for (i in seq_along(projectFilesFY2324_list)) { 
   # seq_along(projectFilesFY2324_list) creates 
   # vector with a number value for each list element
   for (j in seq_along(projectFilesFY2324_list[[i]])) {
     projectFilesFY2324_list[[i]][[j]] <- mutate(projectFilesFY2324_list[[i]][[j]], page_num = j)
   }
-  flatList <- append(flatList, map2(projectFilesFY2324_list[[i]], 
+  flatList2 <- append(flatList2, map2(projectFilesFY2324_list[[i]], 
                                     names(projectFilesFY2324_list[i]), 
                                     ~.x %>% 
                                       mutate(filename = .y)
@@ -491,6 +491,123 @@ for (i in seq_along(projectFilesFY2324_list)) {
 # this bind_rows takes all of the df observations 
 # from all of the list elements and binds them together in a single df.
 
-fullDF_FY2324 <- flatList %>%
-  bind_rows() %>% 
-  filter(y >= 89 & y < 742)   # omit header and footer
+fullDF_FY2324 <- flatList2 %>%
+  bind_rows() #%>% 
+  #filter(y >= 89 & y < 742)   # omit header and footer
+
+# Section 13, FY23 and FY24 coordinate fixes? -------------- 
+# Section 14, FY23 and FY24 grouping and widening -------------- 
+
+concatDF_FY2324 <- fullDF_FY2324 %>%
+  mutate(group = cumsum(lag(!space, default = TRUE))) %>% # Increment group when space is FALSE
+  group_by(group) %>%
+  summarise(
+    text = paste(text, collapse = " "),
+    width = sum(width),
+    height = first(height),
+    x = first(x),
+    y = first(y),
+    eof = x + width,
+    page_num = first(page_num),
+    filename = first(filename),
+    .groups = "drop"
+  ) %>%
+  select(-group) %>%  # Remove the grouping column
+  #select(as.character(sort(as.numeric(names(.)))))
+  arrange(filename, page_num, y, x) # Sort rows by coordinates
+
+# widen by turning x coordinates into column names
+# this replicates the format of the original report, 
+# albeit with staggered lines that we need to realign further down.
+
+wideDF_FY2324 <- concatDF_FY2324 %>% 
+  pivot_wider(
+    id_cols = c(filename, page_num, y), # ensures one row per y coordinate per page
+    names_from = x, 
+    values_from = text) %>% 
+  select(page_num, ######### sort x coordinate columns
+         y, 
+         filename,
+         as.character(
+           sort(as.numeric(
+             setdiff(names(.), c("filename", "page_num", "y"))))))
+
+# now we have a df that is simply x:y coordinates of the page
+# time to smush cols together, yay smush!
+
+# Section 15, FY23 and FY24 set coordinates and unite  -------------- 
+
+# Remove header and column names from page 1
+# if not page 1 only remove column names (because page 2+ has no header)
+headingDF_FY2324 <- wideDF_FY2324 %>% 
+  filter(!( (page_num == 1 & y <= 77) | 
+              (page_num != 1 & y < 53) |
+              (y == 565)))
+
+ownerCols_FY2324 <- c("99", "102")
+parcelCols_FY2324 <- c("249", "294", "298", "303")
+classCols_FY2324 <- c("338", "341")
+assessedCols_FY2324 <- 
+  c("369", "374", "377", "380", "385", "389", "396", "400", "405")
+assessmentCols_FY2324 <- c("413", "418", "422", "429", "430", "434", "438")
+# note the horizontal overlap between these two
+# '$' is the tell, assessment uses $ but assessed and taxable do not
+taxableCols_FY2324 <- c("424", "431", "436", "440", "447", "451", "456")
+transactionsCols_FY2324 <- c("461", "466", "470")
+trxTypeCols_FY2324 <- c("575", "641", "649")
+principleCols_FY2324 <- 
+  c("650", "654", "656", "659", "663", "665", "667", "670", "672", "674", 
+    "678", "693", "697", "702", "705")
+interestCols_FY2324 <- c("710", "713", "719", "721", "724", "726", "728", "732")
+
+smushDF_FY2324 <- headingDF_FY2324 %>%
+  unite("owner", 
+        all_of(ownerCols_FY2324),
+        sep = " ",
+        na.rm = TRUE,   # remove NAs
+        remove = TRUE)  %>% # remove original columns
+  unite("parcel",   # rinse, repeat
+        all_of(parcelCols_FY2324),
+        sep = " ",
+        na.rm = TRUE,
+        remove = TRUE) %>%
+  unite("class",   # rinse, repeat
+        all_of(classCols_FY2324),
+        sep = " ",
+        na.rm = TRUE,
+        remove = TRUE) %>%
+  unite("assessed",   # rinse, repeat
+        all_of(assessedCols_FY2324),
+        sep = " ",
+        na.rm = TRUE,
+        remove = TRUE) %>%
+  unite("assessment",   # rinse, repeat
+        all_of(assessmentCols_FY2324),
+        sep = " ",
+        na.rm = TRUE,
+        remove = TRUE) %>%
+  unite("taxable",   # rinse, repeat
+        all_of(taxableCols_FY2324),
+        sep = " ",
+        na.rm = TRUE,
+        remove = TRUE) %>%
+  unite("transactions",   # rinse, repeat
+        all_of(transactionsCols_FY2324),
+        sep = " ",
+        na.rm = TRUE,
+        remove = TRUE) %>%
+  unite("transaction_type",   # rinse, repeat
+        all_of(trxTypeCols_FY2324),
+        sep = " ",
+        na.rm = TRUE,
+        remove = TRUE) %>%
+  unite("principle",   # rinse, repeat
+        all_of(principleCols_FY2324),
+        sep = " ",
+        na.rm = TRUE,
+        remove = TRUE) %>%
+  unite("interest",   # rinse, repeat
+        all_of(interestCols_FY2324),
+        sep = " ",
+        na.rm = TRUE,
+        remove = TRUE)
