@@ -492,15 +492,33 @@ for (i in seq_along(projectFilesFY2324_list)) {
 # from all of the list elements and binds them together in a single df.
 
 fullDF_FY2324 <- flatList2 %>%
-  bind_rows() #%>% 
-  #filter(y >= 89 & y < 742)   # omit header and footer
+  bind_rows() 
 
 # Section 13, FY23 and FY24 coordinate fixes? -------------- 
+
+  # every case of these x coordinate fields should not end in a space
+fullDF_FY2324$space[
+  fullDF_FY2324$x == 418 |
+    fullDF_FY2324$x == 422 |
+    fullDF_FY2324$x == 424 |
+    fullDF_FY2324$x == 429 |
+    fullDF_FY2324$x == 431 |
+    fullDF_FY2324$x == 434 |
+    fullDF_FY2324$x == 436 |
+    fullDF_FY2324$x == 438 |
+    fullDF_FY2324$x == 440 |
+    fullDF_FY2324$x == 447 |
+    fullDF_FY2324$x == 451 |
+    fullDF_FY2324$x == 456 |
+    fullDF_FY2324$x == 461 |
+    fullDF_FY2324$x == 470] <- FALSE
+
 # Section 14, FY23 and FY24 grouping and widening -------------- 
 
 concatDF_FY2324 <- fullDF_FY2324 %>%
-  mutate(group = cumsum(lag(!space, default = TRUE))) %>% # Increment group when space is FALSE
-  group_by(group) %>%
+  # mutate(group = cumsum(lag(!space, default = TRUE))) %>% # Increment group when space is FALSE
+  #mutate(group = )
+  group_by(row_number()) %>%
   summarise(
     text = paste(text, collapse = " "),
     width = sum(width),
@@ -509,10 +527,10 @@ concatDF_FY2324 <- fullDF_FY2324 %>%
     y = first(y),
     eof = x + width,
     page_num = first(page_num),
-    filename = first(filename),
+    filename = first(filename), 
     .groups = "drop"
   ) %>%
-  select(-group) %>%  # Remove the grouping column
+  #select(-group) %>%  # Remove the grouping column
   #select(as.character(sort(as.numeric(names(.)))))
   arrange(filename, page_num, y, x) # Sort rows by coordinates
 
@@ -528,6 +546,7 @@ wideDF_FY2324 <- concatDF_FY2324 %>%
   select(page_num, ######### sort x coordinate columns
          y, 
          filename,
+          # sets column names to x coordinate value that inits the field value
          as.character(
            sort(as.numeric(
              setdiff(names(.), c("filename", "page_num", "y"))))))
@@ -542,16 +561,28 @@ wideDF_FY2324 <- concatDF_FY2324 %>%
 headingDF_FY2324 <- wideDF_FY2324 %>% 
   filter(!( (page_num == 1 & y <= 77) | 
               (page_num != 1 & y < 53) |
-              (y == 565)))
+              (y == 565))) %>%
+    # removes columns without data
+  select(where(~!all(is.na(.))))
 
-ownerCols_FY2324 <- c("99", "102")
-parcelCols_FY2324 <- c("249", "294", "298", "303")
-classCols_FY2324 <- c("338", "341")
-assessedCols_FY2324 <- 
-  c("369", "374", "377", "380", "385", "389", "396", "400", "405")
+  # grep numeric column names
+numeric_cols <- as.numeric(
+  colnames(headingDF_FY2324)[grepl("^[0-9]+$", 
+                                   colnames(headingDF_FY2324))])
+
+  # group columns by vertical report section
+ownerCols_FY2324 <- numeric_cols[numeric_cols >= 0 & numeric_cols <= 241]
+parcelCols_FY2324 <- numeric_cols[numeric_cols > 241 & numeric_cols <= 322]
+classCols_FY2324 <- numeric_cols[numeric_cols > 322 & numeric_cols <= 357]
+assessedCols_FY2324 <- numeric_cols[numeric_cols > 357 & numeric_cols <= 405]
+
+# HERE #
+
+  # note the horizontal overlap between these two
+  # '$' is the tell, assessment uses $ but assessed and taxable do not
+assessmentCols_FY2324 <- numeric_cols[numeric_cols > 405 & numeric_cols <= ]  
 assessmentCols_FY2324 <- c("413", "418", "422", "429", "430", "434", "438")
-# note the horizontal overlap between these two
-# '$' is the tell, assessment uses $ but assessed and taxable do not
+
 taxableCols_FY2324 <- c("424", "431", "436", "440", "447", "451", "456")
 transactionsCols_FY2324 <- c("461", "466", "470")
 trxTypeCols_FY2324 <- c("575", "641", "649")
