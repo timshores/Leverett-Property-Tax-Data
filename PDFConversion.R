@@ -494,26 +494,7 @@ for (i in seq_along(projectFilesFY2324_list)) {
 fullDF_FY2324 <- flatList2 %>%
   bind_rows() 
 
-# Section 13, FY23 and FY24 coordinate fixes? -------------- 
-
-  # every case of these x coordinate fields should not end in a space
-fullDF_FY2324$space[
-  fullDF_FY2324$x == 418 |
-    fullDF_FY2324$x == 422 |
-    fullDF_FY2324$x == 424 |
-    fullDF_FY2324$x == 429 |
-    fullDF_FY2324$x == 431 |
-    fullDF_FY2324$x == 434 |
-    fullDF_FY2324$x == 436 |
-    fullDF_FY2324$x == 438 |
-    fullDF_FY2324$x == 440 |
-    fullDF_FY2324$x == 447 |
-    fullDF_FY2324$x == 451 |
-    fullDF_FY2324$x == 456 |
-    fullDF_FY2324$x == 461 |
-    fullDF_FY2324$x == 470] <- FALSE
-
-# Section 14, FY23 and FY24 grouping and widening -------------- 
+# Section 13, FY23 and FY24 grouping and widening -------------- 
 
 concatDF_FY2324 <- fullDF_FY2324 %>%
   # mutate(group = cumsum(lag(!space, default = TRUE))) %>% # Increment group when space is FALSE
@@ -554,7 +535,7 @@ wideDF_FY2324 <- concatDF_FY2324 %>%
 # now we have a df that is simply x:y coordinates of the page
 # time to smush cols together, yay smush!
 
-# Section 15, FY23 and FY24 set coordinates and unite  -------------- 
+# Section 14, FY23 and FY24 set coordinates and unite  -------------- 
 
 # Remove header and column names from page 1
 # if not page 1 only remove column names (because page 2+ has no header)
@@ -571,25 +552,31 @@ numeric_cols <- as.numeric(
                                    colnames(headingDF_FY2324))])
 
   # group columns by vertical report section
-ownerCols_FY2324 <- numeric_cols[numeric_cols >= 0 & numeric_cols <= 241]
-parcelCols_FY2324 <- numeric_cols[numeric_cols > 241 & numeric_cols <= 322]
-classCols_FY2324 <- numeric_cols[numeric_cols > 322 & numeric_cols <= 357]
-assessedCols_FY2324 <- numeric_cols[numeric_cols > 357 & numeric_cols <= 405]
-
-# HERE #
-
-  # note the horizontal overlap between these two
-  # '$' is the tell, assessment uses $ but assessed and taxable do not
-assessmentCols_FY2324 <- numeric_cols[numeric_cols > 405 & numeric_cols <= ]  
-assessmentCols_FY2324 <- c("413", "418", "422", "429", "430", "434", "438")
-
-taxableCols_FY2324 <- c("424", "431", "436", "440", "447", "451", "456")
-transactionsCols_FY2324 <- c("461", "466", "470")
-trxTypeCols_FY2324 <- c("575", "641", "649")
-principleCols_FY2324 <- 
-  c("650", "654", "656", "659", "663", "665", "667", "670", "672", "674", 
-    "678", "693", "697", "702", "705")
-interestCols_FY2324 <- c("710", "713", "719", "721", "724", "726", "728", "732")
+ownerCols_FY2324 <- as.character(numeric_cols[numeric_cols >= 0 & numeric_cols <= 241])
+parcelCols_FY2324 <- as.character(numeric_cols[numeric_cols > 241 & numeric_cols <= 322])
+classCols_FY2324 <- as.character(numeric_cols[numeric_cols > 322 & numeric_cols <= 357])
+assessedCols_FY2324 <- as.character(numeric_cols[numeric_cols > 357 & numeric_cols <= 405])
+  # Next two: x coord starting position of assessment and taxable values overlap
+taxableCols_FY2324 <- c("424", # 7-digit values
+                        "431", # 6-digit
+                        "436", # 5-digit
+                        "440", # 4-digit
+                        "447", # 3-digit
+                        "451", # 2-digit
+                        "456") # 1-digit
+  # '$' and '.' is the tell, 
+  # assessment values have $ and decimal, taxable does not
+assessmentCols_FY2324 <- c("413", # 8-digit values
+                           "418", # 7-digit
+                           "422", # 6-digit
+                           "429", # 5-digit
+                           "434", # 4-digit
+                           "438") # 3-digit
+transactionDateCols_FY2324 <- c("461", "466", "470")
+transactionTypeCols_FY2324 <- c("503", "524", "527", "535", "537")
+transactionCategoryCols_FY2324 <- c("575", "593")
+principleCols_FY2324 <- as.character(numeric_cols[numeric_cols > 593 & numeric_cols <= 705])
+interestCols_FY2324 <- as.character(numeric_cols[numeric_cols > 705])
 
 smushDF_FY2324 <- headingDF_FY2324 %>%
   unite("owner", 
@@ -602,43 +589,50 @@ smushDF_FY2324 <- headingDF_FY2324 %>%
         sep = " ",
         na.rm = TRUE,
         remove = TRUE) %>%
-  unite("class",   # rinse, repeat
+  unite("class",   
         all_of(classCols_FY2324),
         sep = " ",
         na.rm = TRUE,
         remove = TRUE) %>%
-  unite("assessed",   # rinse, repeat
+  unite("assessed",
         all_of(assessedCols_FY2324),
         sep = " ",
         na.rm = TRUE,
         remove = TRUE) %>%
-  unite("assessment",   # rinse, repeat
-        all_of(assessmentCols_FY2324),
-        sep = " ",
-        na.rm = TRUE,
-        remove = TRUE) %>%
-  unite("taxable",   # rinse, repeat
+  unite("taxable",
         all_of(taxableCols_FY2324),
         sep = " ",
         na.rm = TRUE,
         remove = TRUE) %>%
-  unite("transactions",   # rinse, repeat
-        all_of(transactionsCols_FY2324),
+  unite("assessment",
+        all_of(assessmentCols_FY2324),
         sep = " ",
         na.rm = TRUE,
         remove = TRUE) %>%
-  unite("transaction_type",   # rinse, repeat
-        all_of(trxTypeCols_FY2324),
+  unite("transaction_date",
+        all_of(transactionDateCols_FY2324),
         sep = " ",
         na.rm = TRUE,
         remove = TRUE) %>%
-  unite("principle",   # rinse, repeat
+  unite("transaction_type",
+        all_of(transactionTypeCols_FY2324),
+        sep = " ",
+        na.rm = TRUE,
+        remove = TRUE) %>%
+  unite("transaction_category",
+        all_of(transactionCategoryCols_FY2324),
+        sep = " ",
+        na.rm = TRUE,
+        remove = TRUE) %>%
+  unite("principle",   
         all_of(principleCols_FY2324),
         sep = " ",
         na.rm = TRUE,
         remove = TRUE) %>%
-  unite("interest",   # rinse, repeat
+  unite("interest",   
         all_of(interestCols_FY2324),
         sep = " ",
         na.rm = TRUE,
         remove = TRUE)
+
+# HERE #
